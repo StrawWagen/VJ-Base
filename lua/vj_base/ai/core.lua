@@ -26,7 +26,6 @@ local funcSetSaveValue = metaEntity.SetSaveValue
 local funcGetCycle = metaEntity.GetCycle
 local funcGetSequenceActivity = metaEntity.GetSequenceActivity
 local funcVisible = metaEntity.Visible
-local funcGetTable = metaEntity.GetTable
 
 local metaNPC = FindMetaTable("NPC")
 local funcGetIdealActivity = metaNPC.GetIdealActivity
@@ -2248,59 +2247,57 @@ end
 		- dist = Radius of the call | DEFAULT: 800
 -----------------------------------------------------------]]
 function ENT:Allies_CallHelp(dist)
-	local selfData = funcGetTable(self)
-	local ene = metaNPC.GetEnemy(self)
-	local enemsPos = metaEntity.GetPos(ene)
-	local myClass = metaEntity.GetClass(self)
-	local myPos = metaEntity.GetPos(self)
+	local ene = self:GetEnemy()
+	local selfData = self:GetTable()
+	local myClass = self:GetClass()
+	local myPos = self:GetPos()
 	local curTime = CurTime()
 	local isFirst = true -- Is this the first ent that received a call?
 	for _, ent in ipairs(ents.FindInSphere(myPos, dist or 800)) do
-		local entData = funcGetTable(ent)
-		if ent != self && entData.IsVJBaseSNPC && entData.CanReceiveOrders && ent:Alive() && (metaEntity.GetClass(ent) == myClass or metaNPC.Disposition(ent, self) == D_LI) && entData.Behavior != VJ_BEHAVIOR_PASSIVE_NATURE && metaEntity.GetClass(ene) != metaEntity.GetClass(ent) && !IsValid(ent:GetEnemy()) then
+		local entData = ent:GetTable()
+		if ent != self && entData.IsVJBaseSNPC && entData.CanReceiveOrders && ent:Alive() && (ent:GetClass() == myClass or ent:Disposition(self) == D_LI) && entData.Behavior != VJ_BEHAVIOR_PASSIVE_NATURE && ene:GetClass() != ent:GetClass() && !IsValid(ent:GetEnemy()) then
 			-- If it's guarding and enemy is not visible, then don't call!
-			if entData.IsGuard && !funcVisible(ent, ene) then continue end
-
+			if entData.IsGuard && !ent:Visible(ene) then continue end
+			
 			local eneIsPlayer = ene:IsPlayer()
-			if ((!eneIsPlayer && metaNPC.Disposition(ent, ene) != D_LI) or eneIsPlayer) then
+			if ((!eneIsPlayer && ent:Disposition(ene) != D_LI) or eneIsPlayer) then
 				-- Enemy too far away for ent
-				local entsPos = metaEntity.GetPos(ent)
-				if entsPos:Distance(enemsPos) > metaNPC.GetMaxLookDistance(ent) then
+				if ent:GetPos():Distance(ene:GetPos()) > ent:GetMaxLookDistance() then
 					-- See if you can move to the ent's location to get closer
-					if !entData.IsFollowing && !entData.IsBusy(ent) then
+					if !entData.IsFollowing && !ent:IsBusy() then
 						-- If it's wandering, then just override it as it's not important
-						if metaNPC.IsMoving(ent) && selfData.CurrentScheduleName != "SCHEDULE_IDLE_WANDER" then
+						if ent:IsMoving() && selfData.CurrentScheduleName != "SCHEDULE_IDLE_WANDER" then
 							continue
 						end
-						metaNPC.SetLastPosition(ent, myPos + self:GetRight() * math.random(-50, 50) + self:GetForward() * math.random(-50, 50))
-						entData.SCHEDULE_GOTO_POSITION(ent, "TASK_RUN_PATH", function(x) x.CanShootWhenMoving = true x.TurnData = {Type = VJ.FACE_ENEMY} end)
+						ent:SetLastPosition(myPos + self:GetRight() * math.random(-50, 50) + self:GetForward() * math.random(-50, 50))
+						ent:SCHEDULE_GOTO_POSITION("TASK_RUN_PATH", function(x) x.CanShootWhenMoving = true x.TurnData = {Type = VJ.FACE_ENEMY} end)
 					else
 						continue
 					end
 				else
 					-- If the enemy is a player and the ent is player-friendly then make that player an enemy to the ent
-					if eneIsPlayer && metaNPC.Disposition(ent, ene) == D_LI then
-						entData.SetRelationshipMemory(ent, ene, VJ.MEM_OVERRIDE_DISPOSITION, D_HT)
+					if eneIsPlayer && ent:Disposition(ene) == D_LI then
+						ent:SetRelationshipMemory(ene, VJ.MEM_OVERRIDE_DISPOSITION, D_HT)
 					end
-					entData.ForceSetEnemy(ent, ene, true)
+					ent:ForceSetEnemy(ene, true)
 					if curTime > entData.NextChaseTime then
-						if entData.Behavior != VJ_BEHAVIOR_PASSIVE && funcVisible(ent, ene) then
-							metaNPC.SetTarget(ent, ene)
-							entData.SCHEDULE_FACE(ent, "TASK_FACE_TARGET")
+						if ent.Behavior != VJ_BEHAVIOR_PASSIVE && ent:Visible(ene) then
+							ent:SetTarget(ene)
+							ent:SCHEDULE_FACE("TASK_FACE_TARGET")
 						else
-							entData.PlaySoundSystem(ent, "ReceiveOrder")
-							entData.MaintainAlertBehavior(ent)
+							ent:PlaySoundSystem("ReceiveOrder")
+							ent:MaintainAlertBehavior()
 						end
 					end
 				end
 				
-				selfData.OnCallForHelp(self, ent, isFirst)
-				selfData.PlaySoundSystem(self, "CallForHelp")
+				self:OnCallForHelp(ent, isFirst)
+				self:PlaySoundSystem("CallForHelp")
 				-- Play the animation
 				if curTime > selfData.NextCallForHelpAnimationT then
 					local anims = selfData.AnimTbl_CallForHelp
 					if anims then
-						selfData.PlayAnim(self, anims, true, false, selfData.CallForHelpAnimFaceEnemy)
+						self:PlayAnim(anims, true, false, selfData.CallForHelpAnimFaceEnemy)
 						selfData.NextCallForHelpAnimationT = curTime + selfData.CallForHelpAnimCooldown
 					end
 				end
